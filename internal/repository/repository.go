@@ -38,7 +38,7 @@ func (r *Repository) FindByID(ctx context.Context, applicationId string) (domain
 		if errors.Is(err, sql.ErrNoRows) {
 			return domain.Application{}, fmt.Errorf("application with id %q, was not found %w", applicationId, domain.ErrNotFound)
 		}
-		return domain.Application{}, err
+		return domain.Application{}, fmt.Errorf("find application %q: %w", applicationId, err)
 	}
 
 	return application, nil
@@ -72,7 +72,7 @@ func (r *Repository) UpdateApplicationAndSaveNotification(ctx context.Context, a
 		return domain.ErrConflict
 	}
 
-	res, err = tx.ExecContext(ctx, notification_query, notification.ID, notification.ApplicationID, notification.ClientID, notification.Text)
+	_, err = tx.ExecContext(ctx, notification_query, notification.ID, notification.ApplicationID, notification.ClientID, notification.Text)
 	if err != nil {
 		return fmt.Errorf("error while insert notification: %w", err)
 	}

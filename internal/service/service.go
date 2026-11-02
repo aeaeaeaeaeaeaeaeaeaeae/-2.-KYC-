@@ -45,7 +45,7 @@ func (s *Service) CompleteKYC(ctx context.Context, applicationID, clientID strin
 
 	application, err := s.Applications.FindByID(ctx, applicationID)
 	if err != nil {
-		return domain.Application{}, err
+		return domain.Application{}, fmt.Errorf("find application: %w", err)
 	}
 
 	if application.ClientID != clientID {
@@ -72,7 +72,7 @@ func (s *Service) CompleteKYC(ctx context.Context, applicationID, clientID strin
 	kycResult, err := s.Kyc.FetchStatus(kycCtx, application.KycSessionID)
 	cancel()
 	if err != nil {
-		return domain.Application{}, err
+		return domain.Application{}, fmt.Errorf("fetch kyc status: %w", err)
 	}
 
 	if application.KycSessionID != kycResult.SessionID {
@@ -92,7 +92,7 @@ func (s *Service) CompleteKYC(ctx context.Context, applicationID, clientID strin
 		if errors.Is(err, domain.ErrConflict) {
 			current, findErrer := s.Applications.FindByID(ctx, applicationID)
 			if findErrer != nil {
-				return domain.Application{}, findErrer
+				return domain.Application{}, fmt.Errorf("reread application after conflict: %w", findErrer)
 			}
 
 			if current.Status == domain.KycCompleted && application.KycSessionID == current.KycSessionID {
@@ -101,7 +101,8 @@ func (s *Service) CompleteKYC(ctx context.Context, applicationID, clientID strin
 		}
 
 		if err != nil {
-			return domain.Application{}, err
+			// Ошибка коммита не доказывает, что запись не прошла; повтор вызова безопасен.
+			return domain.Application{}, fmt.Errorf("complete kyc: %w", err)
 		}
 
 		application.Status = domain.KycCompleted

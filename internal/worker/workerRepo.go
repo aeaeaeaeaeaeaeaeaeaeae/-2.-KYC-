@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"kyc/internal/domain"
 	"time"
 
@@ -24,13 +25,13 @@ func NewWorkerRepo(db *sql.DB, timeout time.Duration) *WorkerRepo {
 	}
 }
 
-func (r *WorkerRepo) WorkerLock(ctx context.Context, limit int) []domain.Notification {
+func (r *WorkerRepo) WorkerLock(ctx context.Context, limit int) ([]domain.Notification, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.dbTimeout)
 	defer cancel()
 
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("begin claim tx: %w", err)
 	}
 	defer tx.Rollback()
 	leaseToken := uuid.NewString()
@@ -41,55 +42,57 @@ func (r *WorkerRepo) WorkerLock(ctx context.Context, limit int) []domain.Notific
 
 	blockingRows, err := tx.QueryContext(ctx, blocking_query, limit)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("select ready notifications: %w", err)
 	}
 	defer blockingRows.Close()
 
 	var notificationsId []string
 	for blockingRows.Next() {
 		var id string
-		if err = blockingRows.Scan(&id); err != nil {
-			continue
+		if err := blockingRows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan notification id: %w", err)
 		}
 		notificationsId = append(notificationsId, id)
 	}
 
-	if blockingRows.Err() != nil {
-		return nil
+	if err := blockingRows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate ready notifications: %w", err)
 	}
 
 	if len(notificationsId) == 0 {
-		tx.Commit()
-		return nil
+		if err := tx.Commit(); err != nil {
+			return nil, fmt.Errorf("commit empty claim: %w", err)
+		}
+		return nil, nil
 	}
 
 	updateRows, err := tx.QueryContext(ctx, update_query, leaseToken, notificationsId)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("claim notifications: %w", err)
 	}
 	defer updateRows.Close()
 
 	var notifications []domain.Notification
 	for updateRows.Next() {
 		var notification domain.Notification
-		if err = updateRows.Scan(&notification.ID, &notification.ClientID, &notification.Text, &notification.Attempts, &notification.CreatedAt, &notification.LeaseToken); err != nil {
-			continue
+		if err := updateRows.Scan(&notification.ID, &notification.ClientID, &notification.Text, &notification.Attempts, &notification.CreatedAt, &notification.LeaseToken); err != nil {
+			return nil, fmt.Errorf("scan claimed notification: %w", err)
 		}
 		notifications = append(notifications, notification)
 	}
 
-	if updateRows.Err() != nil {
-		return nil
+	if err := updateRows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate claimed notifications: %w", err)
 	}
 
-	if err = tx.Commit(); err != nil {
-		return nil
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit claim: %w", err)
 	}
 
-	return notifications
+	return notifications, nil
 }
 
-func (r *WorkerRepo) SaveStatus(ctx context.Context, id, leaseToken string, state domain.NotificationState, nextAttemptAt *time.Time, providerResponse string) bool {
+func (r *WorkerRepo) SaveStatus(ctx context.Context, id, leaseToken string, state domain.NotificationState, nextAttemptAt *time.Time, providerResponse string) (bool, error) {
 	const query = `UPDATE notifications SET next_attempt_at = COALESCE($4, next_attempt_at), provider_ref = $5, state = $1, lease_token = NULL, lease_until = NULL
                    WHERE id = $2 AND lease_token = $3 AND state = 'IN_FLIGHT'`
 
@@ -98,11 +101,14 @@ func (r *WorkerRepo) SaveStatus(ctx context.Context, id, leaseToken string, stat
 
 	res, err := r.db.ExecContext(ctx, query, state, id, leaseToken, nextAttemptAt, providerResponse)
 	if err != nil {
-		return false
+		return false, fmt.Errorf("save notification %s result: %w", id, err)
 	}
 
-	rowsAffected, _ := res.RowsAffected()
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("save notification %s result: rows affected: %w", id, err)
+	}
 
-	return rowsAffected == 1
+	return rowsAffected == 1, nil
 
 }
