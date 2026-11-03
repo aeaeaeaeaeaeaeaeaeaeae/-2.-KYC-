@@ -6,19 +6,16 @@ import (
 )
 
 var (
-	ErrNotFound                = errors.New("заявка не найдена")
-	ErrForbidden               = errors.New("заявка принадлежит другому клиенту")
-	ErrConflict                = errors.New("состояние заявки изменилось")
-	ErrNotImplemented          = errors.New("реализуй метод")
-	ErrInvalidKycResponse      = errors.New("application kyc id and kyc id mismatched")
-	ErrClientIdMismatched      = errors.New("application id and client id mismatched")
-	ErrApplicationCompleted    = errors.New("application already completed")
-	ErrKycNotReady             = errors.New("kyc in progress")
-	ErrKycRejected             = errors.New("kyc rejected")
-	ErrInvalidInput            = errors.New("invalid input")
-	ErrFailedToCreateTx        = errors.New("failed to create tx")
-	ErrFailedToCommitTx        = errors.New("failed to commit tx")
-	ErrOptimisticLockException = errors.New("optimistic lock exception")
+	ErrNotFound             = errors.New("заявка не найдена")
+	ErrForbidden            = errors.New("заявка принадлежит другому клиенту")
+	ErrConflict             = errors.New("состояние заявки изменилось")
+	ErrInvalidKycResponse   = errors.New("application kyc id and kyc id mismatched")
+	ErrApplicationCompleted = errors.New("application already completed")
+	ErrKycNotReady          = errors.New("kyc in progress")
+	ErrKycRejected          = errors.New("kyc rejected")
+	ErrInvalidInput         = errors.New("invalid input")
+	ErrFailedToCreateTx     = errors.New("failed to create tx")
+	ErrFailedToCommitTx     = errors.New("failed to commit tx")
 )
 
 type ApplicationStatus string
@@ -73,11 +70,10 @@ type SMSResult struct {
 type NotificationState string
 
 const (
-	NotificationPending  NotificationState = "PENDING"
-	NotificationInFlight NotificationState = "IN_FLIGHT"
-	NotificationSent     NotificationState = "SENT"
-	NotificationFailed   NotificationState = "FAILED"
-	NotificationManual   NotificationState = "MANUAL"
+	NotificationPending NotificationState = "PENDING"
+	NotificationSent    NotificationState = "SENT"
+	NotificationFailed  NotificationState = "FAILED"
+	NotificationManual  NotificationState = "MANUAL"
 )
 
 type Notification struct {
